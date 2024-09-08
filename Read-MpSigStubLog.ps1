@@ -58,6 +58,7 @@ function Add-ComponentsToResult([collections.arrayList]$components, [collections
 }
 
 function Find-Match([string]$line, [string]$pattern, [bool]$ignoreCase = $true, [Text.RegularExpressions.RegexOptions]$regexOptions = [Text.RegularExpressions.RegexOptions]::None) {
+  Write-Verbose "Find-Match([string]$line, [string]$pattern, [bool]$ignoreCase, [Text.RegularExpressions.RegexOptions]$regexOptions)"
   if (!$line) {
     Write-Error "Regex-Match: No line provided"
     throw
@@ -97,6 +98,7 @@ function Find-Match([string]$line, [string]$pattern, [bool]$ignoreCase = $true, 
 }
 
 function Format-ComponentResults([collections.arrayList]$files, [string]$pattern, [switch]$formatName) {
+  Write-Verbose "Format-ComponentResults([collections.arrayList]$($files.Count), [string]$pattern, [switch]$formatName)"
   $fileList = [collections.arrayList]::new()
   # look for files (names with . in it)
   $files = Read-PropertyNameValues -record $record -propertyName $pattern
@@ -113,7 +115,7 @@ function Format-ComponentResults([collections.arrayList]$files, [string]$pattern
       continue
     }
 
-    $componentValue = Find-Match -line $propertyValue -pattern '(?<Signature>[0-9A-Fa-f]{64})\s+)(?<Version>[\d\.]+'
+    $componentValue = Find-Match -line $propertyValue -pattern '(?<Signature>[0-9A-Fa-f]{64}\s+)|(?<Version>[\d\.]+)'
     if ($componentValue -and $componentValue['Signature']) {
       [void]$fileList.Add([ordered]@{
           'FileName'  = $fileName
@@ -125,7 +127,7 @@ function Format-ComponentResults([collections.arrayList]$files, [string]$pattern
     elseif ($componentValue -and $componentValue['Version']) {
       [void]$fileList.Add([ordered]@{
           'FileName'  = $fileName
-          'Signature' = $componentValue['Version']
+          'Version' = $componentValue['Version']
         })
     }
     else {
@@ -318,7 +320,7 @@ function Read-PackageDiscovery([collections.arrayList]$record, [int]$index) {
   $discoveryRecord.Directory = Read-PropertyValue -record $cleanRecord -propertyName 'Directory'
   
   $packageIdentifier = Read-PropertyName -record $cleanRecord -propertyName $guidPattern
-  $discoveryRecord.PackageIdentifier = Read-PropertyValue -record $cleanRecord -propertyName $packageIdentifier
+  $discoveryRecord.PackageIdentifier = $packageIdentifier #Read-PropertyValue -record $cleanRecord -propertyName $packageIdentifier
   
   #test
   $components = Read-ComponentInfo -record $cleanRecord
