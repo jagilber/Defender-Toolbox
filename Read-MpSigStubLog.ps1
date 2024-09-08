@@ -33,6 +33,7 @@ function main() {
 }
 
 function Add-ComponentsToResult([collections.arrayList]$components, [collections.specialized.orderedDictionary]$resultRecord) {
+  Write-Verbose "Add-ComponentsToResult([collections.arrayList]$($components.Count), [collections.specialized.orderedDictionary]$resultRecord)"
   # components have a name, optional value (value can also be split into signature and version)
   foreach ($component in $components) {
     if ($component.Signature) {
@@ -73,7 +74,7 @@ function Find-Match([string]$line, [string]$pattern, [bool]$ignoreCase = $true, 
   if ($ignoreCase) {
     $regexOptions = $regexOptions -bor [Text.RegularExpressions.RegexOptions]::IgnoreCase
   }
-  
+
   Write-Verbose "Regex-Match: [regex]::Match($line, $pattern, $regexOptions)"
   $regexMatch = [regex]::Match($line, $pattern, $regexOptions)
 
@@ -97,7 +98,7 @@ function Find-Match([string]$line, [string]$pattern, [bool]$ignoreCase = $true, 
   return $null
 }
 
-function Format-ComponentResults([collections.arrayList]$files, [string]$pattern, [switch]$formatName) {
+function Format-ComponentResults([collections.arrayList]$record, [string]$pattern, [switch]$formatName) {
   Write-Verbose "Format-ComponentResults([collections.arrayList]$($files.Count), [string]$pattern, [switch]$formatName)"
   $fileList = [collections.arrayList]::new()
   # look for files (names with . in it)
@@ -105,17 +106,17 @@ function Format-ComponentResults([collections.arrayList]$files, [string]$pattern
 
   foreach ($file in $files) {
     $fileName = $file['propertyName']
-    
+
     if ($formatName) {
-      $fileName = $fileName.Replace(' ', '') 
+      $fileName = $fileName.Replace(' ', '')
     }
-    
+
     $propertyValue = $file['propertyValue']
     if (!$fileName -or !$propertyValue) {
       continue
     }
 
-    $componentValue = Find-Match -line $propertyValue -pattern '(?<Signature>[0-9A-Fa-f]{64}\s+)|(?<Version>[\d\.]+)'
+    $componentValue = Find-Match -line $propertyValue -pattern '(?<Signature>[0-9A-Fa-f]{64}\s+)(?<Version>[\d\.]+)'
     if ($componentValue -and $componentValue['Signature']) {
       [void]$fileList.Add([ordered]@{
           'FileName'  = $fileName
@@ -131,6 +132,7 @@ function Format-ComponentResults([collections.arrayList]$files, [string]$pattern
         })
     }
     else {
+      Write-Verbose "No component value found for $fileName = $propertyValue"
       [void]$fileList.Add([ordered]@{
           'FileName'  = $fileName
           'Signature' = $propertyValue
@@ -152,10 +154,10 @@ function New-PackagesDiscoveryRecord() {
     'Directory'         = ''
     'PackageIdentifier' = '' # guid
     'Files'             = @(
-      [ordered]@{
-        'FileName'  = ''
-        'Signature' = ''
-      }
+      # [ordered]@{
+      #   'FileName'  = ''
+      #   'Signature' = ''
+      # }
     )
     'Engine'            = [ordered]@{
       'Version'   = ''
@@ -184,10 +186,10 @@ function New-PackagesDiscoveryRecord() {
 function New-PatchApplicationRecord() {
   $record = [ordered]@{
     'Files' = @(
-      [ordered]@{
-        'FileName' = ''
-        'Version'  = ''
-      }
+      # [ordered]@{
+      #   'FileName' = ''
+      #   'Version'  = ''
+      # }
     )
   }
   return $record
@@ -292,7 +294,7 @@ function New-ValidateUpdateRecord() {
       }
     )
     'DeltaUpdateFailure' = ''
-    'BddUpdateFailure'   = ''  
+    'BddUpdateFailure'   = ''
   }
   return $record
 }
@@ -306,11 +308,11 @@ function Read-AccumulatePackages([collections.arrayList]$record, [int]$index) {
 }
 
 function Read-ComponentInfo([collections.arrayList]$record) {
-  return Format-ComponentResults -files $record -pattern '[\w\s]+' -formatName
+  return Format-ComponentResults -record $record -pattern '[\w\s]+' -formatName
 }
 
 function Read-FileInfo([collections.arrayList]$record) {
-  return Format-ComponentResults -files $record -pattern '\w+\.\w+'
+  return Format-ComponentResults -record $record -pattern '\w+\..+' #'((?=.+\w)(?=.+\.).*)' #'\w+\.\w+.+'
 }
 
 function Read-PackageDiscovery([collections.arrayList]$record, [int]$index) {
@@ -318,22 +320,20 @@ function Read-PackageDiscovery([collections.arrayList]$record, [int]$index) {
   $cleanRecord = Read-RecordProperty -record $record -index $index
   $discoveryRecord = New-PackagesDiscoveryRecord
   $discoveryRecord.Directory = Read-PropertyValue -record $cleanRecord -propertyName 'Directory'
-  
-  $packageIdentifier = Read-PropertyName -record $cleanRecord -propertyName $guidPattern
-  $discoveryRecord.PackageIdentifier = $packageIdentifier #Read-PropertyValue -record $cleanRecord -propertyName $packageIdentifier
-  
-  #test
-  $components = Read-ComponentInfo -record $cleanRecord
-  $discoveryRecord = Add-ComponentsToResult -components $components -resultRecord $discoveryRecord
-  Write-Host "Components: $($components | out-string)" -ForegroundColor Green
-  Write-Host "Discovery Record: $($discoveryRecord | out-string)" -ForegroundColor Green
-  #end test
 
-  # $discoveryRecord.Engine = Read-PropertyValue -record $cleanRecord -propertyName 'Engine'
-  # $discoveryRecord.ASBaseVDM = Read-PropertyValue -record $cleanRecord -propertyName 'AS Base VDM'
-  # $discoveryRecord.AVBaseVDM = Read-PropertyValue -record $cleanRecord -propertyName 'AV Base VDM'
-  # $discoveryRecord.ASDeltaVDM = Read-PropertyValue -record $cleanRecord -propertyName 'AS Delta VDM'
-  # $discoveryRecord.AVDeltaVDM = Read-PropertyValue -record $cleanRecord -propertyName 'AV Delta VDM'
+  $packageIdentifier = Read-PropertyName -record $cleanRecord -propertyName $guidPattern
+  $discoveryRecord.PackageIdentifier = $packageIdentifier
+
+  $files = Read-FileInfo -record $cleanRecord
+  if($files) {
+    $discoveryRecord.Files = $files
+  }
+
+  $discoveryRecord.Engine = Read-PropertyValue -record $cleanRecord -propertyName 'Engine'
+  $discoveryRecord.ASBaseVDM = Read-PropertyValue -record $cleanRecord -propertyName 'AS Base VDM'
+  $discoveryRecord.AVBaseVDM = Read-PropertyValue -record $cleanRecord -propertyName 'AV Base VDM'
+  $discoveryRecord.ASDeltaVDM = Read-PropertyValue -record $cleanRecord -propertyName 'AS Delta VDM'
+  $discoveryRecord.AVDeltaVDM = Read-PropertyValue -record $cleanRecord -propertyName 'AV Delta VDM'
 
   return $discoveryRecord
 }
@@ -344,6 +344,7 @@ function Read-PatchApplication([collections.arrayList]$record, [int]$index) {
   $patchRecord = New-PatchApplicationRecord
   $patchRecord.Files = [collections.arrayList]::new()
   $filePattern = '^Patched\s+(?<fileName>.+?)\s+?to\s+(?<Version>[\d\.]+)'
+
   foreach ($line in $cleanRecord) {
     $regexMatch = Find-Match -line $line -pattern $filePattern
     if ($regexMatch) {
@@ -383,21 +384,21 @@ function Read-PropertyNames([collections.arrayList]$record, [string]$propertyNam
 }
 
 function Read-PropertyNameValue(
-  [collections.arrayList]$record, 
-  [string]$propertyName, 
-  [string]$propertyNamePrefix = '.+?', 
+  [collections.arrayList]$record,
+  [string]$propertyName,
+  [string]$propertyNamePrefix = '.+?',
   [string]$separator = ':',
   [switch]$all
 ) {
-  $pattern = "$($propertyNamePrefix)(?<propertyName>$($propertyName))\s*?$separator\s*?(?<propertyValue>.*)"
   Write-Verbose "Read-PropertyNameValue([collections.arrayList]$($record.Count), [string]$propertyName, [string]$propertyNamePrefix, [string]$separator)"
   $kvpCollection = [collections.arrayList]::new()
-  
+  $pattern = "$($propertyNamePrefix)(?<propertyName>$($propertyName))\s*?$separator\s*?(?<propertyValue>.*)"
+
   foreach ($line in $record) {
     $regexMatch = Find-Match -line $line -pattern $pattern
     if ($regexMatch) {
-      $propertyValue = $regexMatch['propertyValue'].Trim()
       $propertyName = $regexMatch['propertyName']
+      $propertyValue = $regexMatch['propertyValue'].Trim()
       Write-Verbose "Property name value found: $propertyName = $propertyValue"
       $kvp = @{
         'PropertyName'  = $propertyName
@@ -496,14 +497,13 @@ function Read-RecordProperty([collections.arrayList]$record, [int]$index) {
   # find next record property
   for ($i = 0; $i -lt $cleanRecord.Count; $i++) {
     $line = $cleanRecord[$i]
-    $isMatch = [regex]::IsMatch($line, $recordPropertyPattern)
-    if ($isMatch) {
+
+    if (Find-Match -line $line -pattern $recordPropertyPattern) {
       $foundTerminator = $true
       $lastIndex = $i
       break
     }
     elseif ($i -ge $lastIndex) {
-      # -and [regex]::IsMatch($line, $recordSeparator)) {
       $foundTerminator = $true
       $lastIndex = $i
     }
@@ -511,13 +511,13 @@ function Read-RecordProperty([collections.arrayList]$record, [int]$index) {
 
   #trim $record ending at $lastIndex
   [void]$cleanRecord.RemoveRange($lastIndex, $cleanRecord.Count - $lastIndex)
-  
+
   if ($cleanRecord -and $foundTerminator) {
     Write-Verbose "Record property found: $($cleanRecord | out-string)"
-    # remove pipe characters with ,
-    return , $cleanRecord
+    # remove pipeline output from record with ',' separator.
+    return ,$cleanRecord
   }
-  
+
   Write-Error "unable to determine record property: $($record | out-string)"
   return $null
 }
@@ -527,7 +527,6 @@ function Read-Records($logFilePath) {
   $inRecord = $false
   $index = 0
   $record = [collections.arrayList]::new()
-  #$records = [collections.arrayList]::new()
 
   while ($streamReader.EndOfStream -eq $false) {
     $line = $streamReader.ReadLine()
@@ -539,8 +538,6 @@ function Read-Records($logFilePath) {
     elseif ([regex]::IsMatch($line, $recordSeparator) -and !$inRecord) {
       # start new record
       $inRecord = $true
-      #$global:mpSigStubLogResult = Read-Record $streamReader $index $inRecord
-      #continue
     }
     elseif ([regex]::IsMatch($line, $recordSeparator) -and $inRecord) {
       $inRecord = $false
@@ -551,8 +548,7 @@ function Read-Records($logFilePath) {
       }
       else {
         Write-Error "No record found index: $index"
-        #return 1  
-      }        
+      }
       continue
     }
     elseif ($inRecord) {
@@ -560,7 +556,6 @@ function Read-Records($logFilePath) {
     }
     elseif (!$inRecord) {
       Write-Error "Unknown Record log file format index: $index"
-      #return 1
     }
   }
   return $records
@@ -586,9 +581,12 @@ function Read-Update([collections.arrayList]$record, [int]$index) {
   else {
     Write-Warning "SignatureLocation not found: $signatureLocation"
   }
-  
 
-  $updateRecord.Files = Read-FileInfo -record $cleanRecord
+  $files = Read-FileInfo -record $cleanRecord
+  if($files) {
+    $updateRecord.Files = $files
+  }
+
   return $updateRecord
 }
 
@@ -598,6 +596,10 @@ function Read-ValidateUpdate([collections.arrayList]$record, [int]$index) {
   $validateRecord = New-ValidateUpdateRecord
   $versionPattern = '(?<original>.+?)\s+?(?<updatedTo>.+)'
 
+  $matchRecords = Find-Match -line ($cleanRecord -join "`n") -pattern '(?<update>MpSigStub.+)'
+  if ($matchRecords) {
+   $validateRecord.Update = $matchRecords['update']
+  }
   $validateRecord.DeltaUpdateFailure = Read-PropertyValue -record $cleanRecord -propertyName 'DeltaUpdateFailure' -propertyNamePrefix $startOfLinePattern -separator 'set to'
   $validateRecord.BddUpdateFailure = Read-PropertyValue -record $cleanRecord -propertyName 'BDDUpdateFailure' -propertyNamePrefix $startOfLinePattern -separator 'set to'
 
