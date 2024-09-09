@@ -1,4 +1,34 @@
 <#
+.SYNOPSIS
+Reads the MpSigStub.log file and returns the results as an array of PowerShell objects.
+
+.DESCRIPTION
+Reads the MpSigStub.log file and returns the results as an array of PowerShell objects.
+Results are also stored in the global variable $global:mpSigStubLogResults.
+To troubleshoot, use -Verbose to see additional information.
+
+.NOTES
+File Name      : Read-MpSigStubLog.ps1
+version        : 0.1
+
+.EXAMPLE
+"C:\Program Files\Windows Defender\MpCmdRun.exe" -GetFiles
+copy 'C:\ProgramData\Microsoft\Windows Defender\Support\MpSupportFiles.cab'
+expand -R -I $pwd\MpSupportFiles.cab -F:* $pwd\MpSupportFiles
+
+To generate the MpSigStub.log file
+
+.EXAMPLE
+.\Read-MpSigStubLog.ps1 -logFilePath $pwd\MpSupportFiles\MpSigStub.log
+
+Reads the MpSigStub.log file and returns the results as a PowerShell object.
+
+.PARAMETER logFilePath
+The path to the MpSigStub.log file.
+
+.PARAMETER verbose
+Show additional information for troubleshooting.
+
 #>
 [cmdletbinding()]
 param(
@@ -6,8 +36,6 @@ param(
 )
 
 $global:mpSigStubLogResults = [ordered]@{}
-$global:mpSigStubLogResult = [ordered]@{}
-$global:mpSigStubLogResultObject = [ordered]@{}
 $recordSeparator = '--------------------------------------------------------------------------------'
 $recordPropertyPattern = '={10,}? (?<propertyName>\w+) ={10,}?'
 $guidPattern = '\w{8}-\w{4}-\w{4}-\w{4}-\w{12}'
@@ -16,13 +44,12 @@ $global:records = [collections.arrayList]::new()
 
 function main() {
   try {
-
     if (!(Test-Path $logFilePath)) {
       Write-Host "File not found: $logFilePath"
       return 1
     }
-    $global:mpSigStubLogResults = Read-Records $logFilePath
 
+    $global:mpSigStubLogResults = Read-Records $logFilePath
     return $global:mpSigStubLogResults
   }
   catch {
@@ -65,6 +92,7 @@ function Find-Match([string]$line, [string]$pattern, [bool]$ignoreCase = $true, 
     throw
     return $null
   }
+
   if (!$pattern) {
     Write-Error "Regex-Match: No pattern provided"
     throw
@@ -127,8 +155,8 @@ function Format-ComponentResults([collections.arrayList]$record, [string]$patter
     }
     elseif ($componentValue -and $componentValue['Version']) {
       [void]$fileList.Add([ordered]@{
-          'FileName'  = $fileName
-          'Version' = $componentValue['Version']
+          'FileName' = $fileName
+          'Version'  = $componentValue['Version']
         })
     }
     else {
@@ -325,7 +353,7 @@ function Read-PackageDiscovery([collections.arrayList]$record, [int]$index) {
   $discoveryRecord.PackageIdentifier = $packageIdentifier
 
   $files = Read-FileInfo -record $cleanRecord
-  if($files) {
+  if ($files) {
     $discoveryRecord.Files = $files
   }
 
@@ -515,7 +543,7 @@ function Read-RecordProperty([collections.arrayList]$record, [int]$index) {
   if ($cleanRecord -and $foundTerminator) {
     Write-Verbose "Record property found: $($cleanRecord | out-string)"
     # remove pipeline output from record with ',' separator.
-    return ,$cleanRecord
+    return , $cleanRecord
   }
 
   Write-Error "unable to determine record property: $($record | out-string)"
@@ -583,7 +611,7 @@ function Read-Update([collections.arrayList]$record, [int]$index) {
   }
 
   $files = Read-FileInfo -record $cleanRecord
-  if($files) {
+  if ($files) {
     $updateRecord.Files = $files
   }
 
@@ -598,7 +626,7 @@ function Read-ValidateUpdate([collections.arrayList]$record, [int]$index) {
 
   $matchRecords = Find-Match -line ($cleanRecord -join "`n") -pattern '(?<update>MpSigStub.+)'
   if ($matchRecords) {
-   $validateRecord.Update = $matchRecords['update']
+    $validateRecord.Update = $matchRecords['update']
   }
   $validateRecord.DeltaUpdateFailure = Read-PropertyValue -record $cleanRecord -propertyName 'DeltaUpdateFailure' -propertyNamePrefix $startOfLinePattern -separator 'set to'
   $validateRecord.BddUpdateFailure = Read-PropertyValue -record $cleanRecord -propertyName 'BDDUpdateFailure' -propertyNamePrefix $startOfLinePattern -separator 'set to'
@@ -619,6 +647,5 @@ function Read-ValidateUpdate([collections.arrayList]$record, [int]$index) {
 
   return $validateRecord
 }
-
 
 main
