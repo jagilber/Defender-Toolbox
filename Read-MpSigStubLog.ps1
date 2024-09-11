@@ -33,6 +33,7 @@ Show additional information for troubleshooting.
 #>
 [cmdletbinding()]
 param(
+  [parameter(Mandatory=$true)]
   [string]$logFilePath
 )
 
@@ -42,10 +43,12 @@ $recordPropertyPattern = '={10,}? (?<propertyName>\w+) ={10,}?'
 $guidPattern = '\w{8}-\w{4}-\w{4}-\w{4}-\w{12}'
 $startOfLinePattern = '^'
 $global:records = [collections.arrayList]::new()
+$scriptName = "$psscriptroot\$($MyInvocation.MyCommand.Name)"
 
 function main() {
   try {
     if (!(Test-Path $logFilePath)) {
+      Get-Help $scriptName -Examples
       Write-Host "File not found: $logFilePath"
       return $null
     }
