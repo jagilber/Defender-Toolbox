@@ -12,8 +12,9 @@ File Name      : Read-MpSigStubLog.ps1
 version        : 0.1
 
 .EXAMPLE
-"C:\Program Files\Windows Defender\MpCmdRun.exe" -GetFiles
+C:\'Program Files'\'Windows Defender'\MpCmdRun.exe -GetFiles
 copy 'C:\ProgramData\Microsoft\Windows Defender\Support\MpSupportFiles.cab'
+md $pwd\MpSupportFiles
 expand -R -I $pwd\MpSupportFiles.cab -F:* $pwd\MpSupportFiles
 
 To generate the MpSigStub.log file
@@ -46,7 +47,7 @@ function main() {
   try {
     if (!(Test-Path $logFilePath)) {
       Write-Host "File not found: $logFilePath"
-      return 1
+      return $null
     }
 
     $global:mpSigStubLogResults = Read-Records $logFilePath
@@ -340,7 +341,7 @@ function Read-ComponentInfo([collections.arrayList]$record) {
 }
 
 function Read-FileInfo([collections.arrayList]$record) {
-  return Format-ComponentResults -record $record -pattern '\w+\..+' #'((?=.+\w)(?=.+\.).*)' #'\w+\.\w+.+'
+  return Format-ComponentResults -record $record -pattern '\w+\..+'
 }
 
 function Read-PackageDiscovery([collections.arrayList]$record, [int]$index) {
@@ -558,12 +559,17 @@ function Read-Records($logFilePath) {
 
   while ($streamReader.EndOfStream -eq $false) {
     $line = $streamReader.ReadLine()
+    Write-Verbose "Read-Records: $line"
     $index++
 
     if ($line.Length -eq 0) {
       continue
     }
-    elseif ([regex]::IsMatch($line, $recordSeparator) -and !$inRecord) {
+
+    # remove unknown unicode characters outside of ASCII range
+    $line = [string]::Join('', ($line.ToCharArray() | Where-Object { [int]$psitem -ge 32 -and [int]$psitem -le 126 }))
+
+    if ([regex]::IsMatch($line, $recordSeparator) -and !$inRecord) {
       # start new record
       $inRecord = $true
     }
