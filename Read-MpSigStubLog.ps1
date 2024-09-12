@@ -59,7 +59,7 @@ function main() {
   catch {
     write-verbose "variables:$((get-variable -scope local).value | convertto-json -WarningAction SilentlyContinue -depth 2)"
     write-host "exception::$($psitem.Exception.Message)`r`n$($psitem.scriptStackTrace)" -ForegroundColor Red
-    return 1
+    return $null
   }
 }
 
@@ -592,7 +592,7 @@ function Read-Records($logFilePath) {
       [void]$record.Add($line)
     }
     elseif (!$inRecord) {
-      Write-Error "Unknown Record log file format index: $index"
+      Write-Warning "Unknown Record log file format index: $index"
     }
   }
   return $records
