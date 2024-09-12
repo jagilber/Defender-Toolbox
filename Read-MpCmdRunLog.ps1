@@ -9,7 +9,7 @@ To troubleshoot, use -Verbose to see additional information.
 
 .NOTES
 File Name      : Read-mpCmdRunLog.ps1
-version        : 0.0
+version        : 0.1
 
 .EXAMPLE
 C:\'Program Files'\'Windows Defender'\MpCmdRun.exe -GetFiles
@@ -63,11 +63,19 @@ function main() {
 
     $global:mpCmdRunLogResults = Read-Records $logFilePath
 
-    $eventTypes = $global:mpCmdRunLogResults.Command | Group-Object | Sort-Object | Select-Object Count,Name
+    $eventTypes = $global:mpCmdRunLogResults.Command | Group-Object | Sort-Object | Select-Object Count, Name
     Write-Host "Event Types: $($eventTypes | Out-String)" -ForegroundColor Green
 
-    $errorEventTypes = $global:mpCmdRunLogResults.Where({$psitem.Level -ine 'information'}).Command | Group-Object | Sort-Object | Select-Object Count,Name
-    Write-Host "Event Types with Errors: $($errorEventTypes | out-string)" -ForegroundColor Red
+    $errorEventTypes = $global:mpCmdRunLogResults.Where({ $psitem.Level -ieq 'warning' }).Command | Group-Object | Sort-Object | Select-Object Count, Name
+    
+    if ($errorEventTypes) {
+      Write-Host "Event Types with Warnings: $($errorEventTypes | out-string)" -ForegroundColor Yellow
+    }
+    
+    $errorEventTypes = $global:mpCmdRunLogResults.Where({ $psitem.Level -ieq 'error' }).Command | Group-Object | Sort-Object | Select-Object Count, Name
+    if ($errorEventTypes) {
+      Write-Host "Event Types with Errors: $($errorEventTypes | out-string)" -ForegroundColor Red
+    }
 
     return $global:mpCmdRunLogResults
   }
@@ -238,25 +246,41 @@ function Read-Record([collections.arrayList]$record, [int]$index) {
     $newRecord.Level = 'Information'
   }
 
-  # Read first Line for Command Line
-  $recordIndex = 0
-  $line = $record[$recordIndex++].Trim()
-  Get-Commands -commandLine $line -record $newRecord
-  # Read second line for Start Time
-  $line = $record[$recordIndex++].Replace('Start Time: ', '').Trim()
-  $newRecord.StartTime = Format-Timestamp -timestamp $line
-
-  for ($recordIndex; $recordIndex -lt $record.Count - 1) {
-    $line = $record[$recordIndex++].Trim()
+  for ($recordIndex = 0; $recordIndex -lt $record.Count; $recordIndex++) {
+    $line = $record[$recordIndex].Trim()
     if (!$line) { continue }
+
+    if ($recordIndex -eq 0) {
+      # Read first line for Command Line
+      $line = $line.Replace($recordIdentifier, '')
+      Get-Commands -commandLine $line -record $newRecord
+      continue
+    }
+    elseif ($recordIndex -eq 1) {
+      # Read second line for Start Time
+      $line = $line.Replace('Start Time: ', '').Trim()
+      $newRecord.StartTime = Format-Timestamp -timestamp $line
+      continue
+    }
+    elseif ($recordIndex -eq $record.Count - 1) {
+      # Read last line for End record
+      # unlike Start record, End record is not always at the start of the last line
+      $endTime = Find-Matches -line $line -pattern "(?<previousLine>.*?)$($recordIdentifier)End Time: (?<timestamp>.+)"
+      if ($endTime -and $endTime['timestamp']) {
+        $newRecord.EndTime = Format-Timestamp -timestamp $endTime['timestamp']
+      }
+      
+      if ($endTime -and $endTime['previousLine']) {
+        $newRecord.Details += $line
+      }
+
+      continue
+    }
+
     $newRecord.Details += $line
   }
 
-  # Read last line for End Time
-  $line = $record[$recordIndex].Replace('End Time: ', '').Trim()
-  $newRecord.EndTime = Format-Timestamp -timestamp $line
-
-  if($errorsOnly -and $newRecord.Level -ine 'Error') {
+  if ($errorsOnly -and $newRecord.Level -ine 'Error') {
     return $null
   }
 
@@ -291,15 +315,16 @@ function Read-Records($logFilePath) {
     # remove unknown unicode characters outside of ASCII range
     $line = [string]::Join('', ($line.ToCharArray() | Where-Object { [int]$psitem -ge 32 -and [int]$psitem -le 126 }))
 
-    if ($line.StartsWith($startOfRecord) -and !$inRecord) {
+    #if ($line.StartsWith($startOfRecord) -and !$inRecord) {
+    if ((Find-Matches -line $line -pattern $startOfRecord) -and !$inRecord) {
       # start new record
       $inRecord = $true
-      $line = $line.Replace($recordIdentifier, '')
+
       [void]$record.Add($line)
     }
-    elseif ($line.StartsWith($endOfRecord) -and $inRecord) {
+    elseif ((Find-Matches -line $line -pattern $endOfRecord) -and $inRecord) {
+      #elseif ($line.StartsWith($endOfRecord) -and $inRecord) {
       $inRecord = $false
-      $line = $line.Replace($recordIdentifier, '')
       # add record to results
       [void]$record.Add($line)
       [void]$records.Add((Read-Record $record $index))
