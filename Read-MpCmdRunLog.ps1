@@ -46,14 +46,14 @@ param(
 
 $global:mpCmdRunLogResults = [ordered]@{}
 $recordSeparator = '-------------------------------------------------------------------------------------'
-$global:records = [collections.arrayList]::new()
+$global:records = [Collections.ArrayList]::New()
 $scriptName = "$psscriptroot\$($MyInvocation.MyCommand.Name)"
 $recordIdentifier = 'MpCmdRun: '
 $startOfRecord = "$($recordIdentifier)Command Line:"
 $endOfRecord = "$($recordIdentifier)End Time:"
 $mpCmdRunExe = 'MpCmdRun.exe'
 
-function main() {
+function Main() {
   try {
     if (!(Test-Path $logFilePath)) {
       Get-Help $scriptName -Examples
@@ -62,7 +62,6 @@ function main() {
     }
 
     $global:mpCmdRunLogResults = Read-Records $logFilePath
-
     $eventTypes = $global:mpCmdRunLogResults.Command | Group-Object | Sort-Object | Select-Object Count, Name
     Write-Host "Event Types: $($eventTypes | Out-String)" -ForegroundColor Green
 
@@ -86,7 +85,7 @@ function main() {
   }
 }
 
-function Find-RecordMatches([collections.arrayList]$record, [string]$pattern, [bool]$ignoreCase = $true, [Text.RegularExpressions.RegexOptions]$regexOptions = [Text.RegularExpressions.RegexOptions]::None) {
+function Find-RecordMatches([Collections.ArrayList]$record, [string]$pattern, [bool]$ignoreCase = $true, [Text.RegularExpressions.RegexOptions]$regexOptions = [Text.RegularExpressions.RegexOptions]::None) {
   Write-Verbose "Find-RecordMatches([string]$record,[string]$pattern, [bool]$ignoreCase, [Text.RegularExpressions.RegexOptions]$regexOptions)"
   $line = [string]::Join("`n", $record.ToArray())
   return Find-Matches -line $line -pattern $pattern -ignoreCase $ignoreCase -regexOptions $regexOptions
@@ -129,8 +128,7 @@ function Find-Matches([string]$line, [string]$pattern, [bool]$ignoreCase = $true
         return $null
       }
 
-      # create key value pair
-      $groups = @{ }
+      $groups = @{}
       foreach ($group in $regexMatch.Groups) {
         Write-Verbose "Regex-Match: Group: $($group.Name) = $($group.Value)"
         [void]$groups.Add($group.Name.Trim(), $group.Value.Trim())
@@ -150,7 +148,7 @@ function Format-Timestamp([string]$timestamp, [string]$timeFormat = "yyyy-MM-ddT
 
 function Get-Commands([string]$commandLine, [collections.specialized.orderedDictionary]$record) {
   Write-Verbose "Get-Commands([string]$commandLine)"
-  $commandOptions = [collections.Arraylist]::new()
+  $commandOptions = [Collections.ArrayList]::New()
   $commandString = (Find-Matches -line $commandLine -pattern "$mpCmdRunExe`"?(?<commandString>.+)")
 
   if (!$commandString) {
@@ -190,48 +188,11 @@ function New-Record() {
   return $record
 }
 
-function Read-PropertyNameValue(
-  [collections.arrayList]$record,
-  [string]$propertyName,
-  [string]$propertyNamePrefix = '.+?',
-  [string]$separator = ':',
-  [switch]$all
-) {
-  Write-Verbose "Read-PropertyNameValue([collections.arrayList]$($record.Count), [string]$propertyName, [string]$propertyNamePrefix, [string]$separator)"
-  $kvpCollection = [collections.arrayList]::new()
-  $pattern = "$($propertyNamePrefix)(?<propertyName>$($propertyName))\s*?$separator\s*?(?<propertyValue>.*)"
-
-  foreach ($line in $record) {
-    $regexMatch = Find-Matches -line $line -pattern $pattern
-    if ($regexMatch) {
-      $propertyName = $regexMatch['propertyName']
-      $propertyValue = $regexMatch['propertyValue'].Trim()
-      Write-Verbose "Property name value found: $propertyName = $propertyValue"
-      $kvp = @{
-        'PropertyName'  = $propertyName
-        'PropertyValue' = $propertyValue
-      }
-      if ($all) {
-        [void]$kvpCollection.Add($kvp)
-      }
-      else {
-        return $kvp
-      }
-    }
-  }
-
-  if ($all) {
-    return $kvpCollection
-  }
-  Write-Warning "Property name value not found: $propertyName"
-  return $null
-}
-
-function Read-Record([collections.arrayList]$record, [int]$index) {
-  Write-Verbose "Read-Record([collections.arrayList]$($record.Count), [int]$index)"
-  #$newRecord = Read-RecordMetaData -record $record -newRecord (New-Record)
+function Read-Record([Collections.ArrayList]$record, [int]$index) {
+  Write-Verbose "Read-Record([Collections.ArrayList]$($record.Count), [int]$index)"
   $newRecord = New-Record
   $returnCode = Find-RecordMatches -record $record -pattern "MpCmdRun.exe: hr = (?<returnCode>.+)"
+  
   if ($returnCode) {
     $newRecord.CommandReturn = $returnCode['returnCode']
   }
@@ -285,11 +246,11 @@ function Read-Record([collections.arrayList]$record, [int]$index) {
   }
 
   if ($quiet -eq $false) {
-    $consoleColor = [System.ConsoleColor]::White
+    $consoleColor = [ConsoleColor]::White
     switch ($newRecord.Level) {
-      'Error' { $consoleColor = [System.ConsoleColor]::Red }
-      'Warning' { $consoleColor = [System.ConsoleColor]::Yellow }
-      'Information' { $consoleColor = [System.ConsoleColor]::Green }
+      'Error' { $consoleColor = [ConsoleColor]::Red }
+      'Warning' { $consoleColor = [ConsoleColor]::Yellow }
+      'Information' { $consoleColor = [ConsoleColor]::Green }
     }
     Write-Host "returning record $($records.Count): $($newRecord | out-string)" -ForegroundColor $consoleColor
   }
@@ -298,10 +259,10 @@ function Read-Record([collections.arrayList]$record, [int]$index) {
 }
 
 function Read-Records($logFilePath) {
-  $streamReader = [System.IO.StreamReader]::new($logFilePath, [System.Text.Encoding]::Unicode)
+  $streamReader = [IO.StreamReader]::New($logFilePath, [Text.Encoding]::Unicode)
   $inRecord = $false
   $index = 0
-  $record = [collections.arrayList]::new()
+  $record = [Collections.ArrayList]::New()
 
   while ($streamReader.EndOfStream -eq $false) {
     $line = $streamReader.ReadLine().Trim()
@@ -312,10 +273,7 @@ function Read-Records($logFilePath) {
       continue
     }
 
-    # remove unknown unicode characters outside of ASCII range
-    $line = [string]::Join('', ($line.ToCharArray() | Where-Object { [int]$psitem -ge 32 -and [int]$psitem -le 126 }))
-
-    #if ($line.StartsWith($startOfRecord) -and !$inRecord) {
+    $line = Remove-UnicodeCharacters -line $line
     if ((Find-Matches -line $line -pattern $startOfRecord) -and !$inRecord) {
       # start new record
       $inRecord = $true
@@ -323,7 +281,6 @@ function Read-Records($logFilePath) {
       [void]$record.Add($line)
     }
     elseif ((Find-Matches -line $line -pattern $endOfRecord) -and $inRecord) {
-      #elseif ($line.StartsWith($endOfRecord) -and $inRecord) {
       $inRecord = $false
       # add record to results
       [void]$record.Add($line)
@@ -344,4 +301,9 @@ function Read-Records($logFilePath) {
   return $records
 }
 
-main
+function Remove-UnicodeCharacters([string]$line) {
+  $line = [Text.RegularExpressions.Regex]::Replace($line, "[^\u0000-\u007F]", "")
+  return $line
+}
+
+Main
