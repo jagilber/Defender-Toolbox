@@ -1,40 +1,40 @@
 <#
 .SYNOPSIS
-Reads the MpCmdRun*.log files and returns the results as an array of PowerShell objects.
+    Reads the MpCmdRun*.log files and returns the results as an array of PowerShell objects.
 
 .DESCRIPTION
-Reads the MpCmdRun*.log files and returns the results as an array of PowerShell objects.
-Results are also stored in the global variable $global:mpCmdRunLogResults.
-To troubleshoot, use -Verbose to see additional information.
+    Reads the MpCmdRun*.log files and returns the results as an array of PowerShell objects.
+    Results are also stored in the global variable $global:mpCmdRunLogResults.
+    To troubleshoot, use -Verbose to see additional information.
 
 .NOTES
-File Name      : Read-mpCmdRunLog.ps1
-version        : 0.1
+    File Name      : Read-MpCmdRunLog.ps1
+    version        : 0.1
 
 .EXAMPLE
-C:\'Program Files'\'Windows Defender'\MpCmdRun.exe -GetFiles
-copy 'C:\ProgramData\Microsoft\Windows Defender\Support\MpSupportFiles.cab'
-md $pwd\MpSupportFiles
-expand -R -I $pwd\MpSupportFiles.cab -F:* $pwd\MpSupportFiles
+    C:\'Program Files'\'Windows Defender'\MpCmdRun.exe -GetFiles
+    copy 'C:\ProgramData\Microsoft\Windows Defender\Support\MpSupportFiles.cab'
+    md $pwd\MpSupportFiles
+    expand -R -I $pwd\MpSupportFiles.cab -F:* $pwd\MpSupportFiles
 
-To generate the mpCmdRun.log file
+    To generate the mpCmdRun.log file
 
 .EXAMPLE
-.\Read-mpCmdRunLog.ps1 -logFilePath $pwd\MpSupportFiles\mpCmdRun.log
+    .\Read-mpCmdRunLog.ps1 -logFilePath $pwd\MpSupportFiles\mpCmdRun.log
 
-Reads the mpCmdRun.log file and returns the results as a PowerShell object.
+    Reads the mpCmdRun.log file and returns the results as a PowerShell object.
 
 .PARAMETER logFilePath
-The path to the mpCmdRun.log file.
+    The path to the mpCmdRun.log file.
 
 .PARAMETER errorsOnly
-Show only errors.
+    Show only errors.
 
 .PARAMETER quiet
-Do not show any output.
+    Do not show any output.
 
 .PARAMETER verbose
-Show additional information for troubleshooting.
+    Show additional information for troubleshooting.
 #>
 [cmdletbinding()]
 param(
