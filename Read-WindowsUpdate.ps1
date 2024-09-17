@@ -7,7 +7,7 @@
     The script uses pktmon or netsh to convert the ETL files to CSV format.
     The script then reads the CSV files and parses the entries into a global custom object $global:windowsUpdateEntries
     The custom object contains the following properties:
-    - TimeCreated: The time the event was created in UTC
+    - Time: The time the event was created in UTC
     - PID: The process ID in decimal format
     - TID: The thread ID in decimal format
     - Level: The event level (Critical, Error, Warning, Information, Verbose)
@@ -18,7 +18,7 @@
 
 .NOTES
 File Name      : Read-WindowsUpdate.ps1
-version        : 0.1
+version        : 0.2
 
 .EXAMPLE
     C:\'Program Files'\'Windows Defender'\MpCmdRun.exe -GetFiles
@@ -35,17 +35,35 @@ version        : 0.1
 
 .PARAMETER mpSupportFilesPath
     The path to the directory containing the WindowsUpdate ETL files
+
+.PARAMETER etlFileFilter
+    The filter to apply to the ETL files in the directory
+    default: "WindowsUpdate*.etl"
+
+.PARAMETER useNetsh
+    Use netsh to convert the ETL files to CSV format
+    default: $false
+
+.PARAMETER outputFile
+    The path to save the parsed entries to a CSV or JSON file
 #>
 [cmdletbinding()]
 param(
   [Parameter(Mandatory = $true)]
   [string]$mpSupportFilesPath, # Path to the directory containing the WindowsUpdate ETL files
   [string]$etlFileFilter = "WindowsUpdate*.etl",
-  [switch]$useNetsh # Using pktmon to parse the ETL files is about 33% faster than netsh but not available on all systems
+  [switch]$useNetsh, # Using pktmon to parse the ETL files is about 33% faster than netsh but not available on all systems
+  [string]$outputFile #= "$pwd\WindowsUpdate.csv" # if specified, the script will save the parsed entries to a CSV file or JSON file
 )
 
 $global:windowsUpdateEntries = [System.Collections.ArrayList]::New()
 $scriptName = "$psscriptroot\$($MyInvocation.MyCommand.Name)"
+
+class DateTimeComparer : System.Collections.IComparer {
+  [int] Compare($x, $y) {
+    return [DateTime]::Compare($x.time, $y.time)
+  }
+}
 
 function Main() {
   try {
@@ -68,11 +86,17 @@ function Main() {
       Write-Error "No ETL files found in the specified directory: $mpSupportFilesPath"
       return $null
     }
-    
+
+    Write-Host "sorting entries" -ForegroundColor Cyan
+    $global:windowsUpdateEntries.Sort([DateTimeComparer]::new())
+
+    Save-ToFile -outputFile $outputFile
     $levelGroups = $global:windowsUpdateEntries.Level | Group-Object | Sort-Object | Select-Object Count, Name
+
     Write-Host "Level Counts:$($levelGroups| out-string)" -ForegroundColor Cyan
     Write-Host "Total entries: $($global:windowsUpdateEntries.Count)"
     Write-Host "Entries saved to `$global:windowsUpdateEntries"
+    
     return $global:windowsUpdateEntries
   }
   catch {
@@ -109,8 +133,8 @@ function Format-EtlFile([string]$fileName, [bool]$usepktmon) {
     return $null
   }
 
-  remove-item -Path $outputFileName -Force
-  
+  Remove-Item -Path $outputFileName -Force
+
   Write-Host "Format-EtlFile: $fileName - $($eventEntries.Count) entries"
   return $eventEntries
 }
@@ -129,7 +153,7 @@ function Get-Level([int]$intLevel) {
 
 function New-Event() {
   $eventRecord = [ordered]@{
-    time     = $null
+    time     = [datetime]::MinValue
     pid      = ''
     tid      = ''
     level    = ''
@@ -160,7 +184,7 @@ function Read-NetshCsvFile([string]$fileName) {
         $jsonMeta = $jsonObject.meta
 
         $entry = New-Event
-        $entry.time = $jsonMeta.time #[datetime]::Parse($jsonMeta.time)
+        $entry.time = [datetime]::Parse($jsonMeta.time)
         $entry.pid = $jsonMeta.pid
         $entry.tid = $jsonMeta.tid
         $entry.level = Get-Level -intLevel $jsonMeta.level
@@ -220,6 +244,32 @@ function Read-PktmonCsvFile([string]$fileName) {
     Write-Host "exception::$($psitem.Exception.Message)`r`n$($psitem.scriptStackTrace)" -ForegroundColor Red
     $streamReader.Close()
     return $null
+  }
+}
+
+function Save-ToFile([string]$outputFile) {
+  if (!$outputFile) { return }
+
+  Write-Host "Saving entries to $outputFile" -ForegroundColor Cyan
+
+  if ((Test-Path -PathType Leaf -Path $outputFile)) {
+    Write-Warning "Remove-Item -Path $outputFile -Force"
+    Remove-Item -Path $outputFile -Force
+  }
+
+  if ($outputFile.ToLower().EndsWith(".json")) {
+    $global:windowsUpdateEntries | ConvertTo-Json | Out-File -FilePath $outputFile
+  }
+  else {
+    # export-csv does not format datetime correctly
+    $streamWriter = [IO.StreamWriter]::New($outputFile, $false)
+    $streamWriter.WriteLine("Time,PID,TID,Level,Keyword,Provider,Event,Info")
+
+    foreach ($entry in $global:windowsUpdateEntries) {
+      $line = "$($entry.time.ToString('o')),$($entry.pid),$($entry.tid),$($entry.level),$($entry.keyword),$($entry.provider),$($entry.event),$($entry.info)"
+      $streamWriter.WriteLine($line)
+    }
+    $streamWriter.Close()
   }
 }
 
