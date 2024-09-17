@@ -40,12 +40,12 @@ version        : 0.1
 param(
   [Parameter(Mandatory = $true)]
   [string]$mpSupportFilesPath, # Path to the directory containing the WindowsUpdate ETL files
+  [string]$etlFileFilter = "WindowsUpdate*.etl",
   [switch]$useNetsh # Using pktmon to parse the ETL files is about 33% faster than netsh but not available on all systems
 )
 
 $global:windowsUpdateEntries = [System.Collections.ArrayList]::New()
 $scriptName = "$psscriptroot\$($MyInvocation.MyCommand.Name)"
-$etlFileFilter = "WindowsUpdate*.etl"
 
 function Main() {
   try {
@@ -117,11 +117,11 @@ function Format-EtlFile([string]$fileName, [bool]$usepktmon) {
 
 function Get-Level([int]$intLevel) {
   $level = switch ($intLevel) {
-    0 { return "Critical" }
-    1 { return "Error" }
-    2 { return "Warning" }
-    3 { return "Information" }
-    4 { return "Verbose" }
+    1 { return "Critical" }
+    2 { return "Error" }
+    3 { return "Warning" }
+    4 { return "Information" }
+    5 { return "Verbose" }
     default { return "Unknown" }
   }
   return $level
