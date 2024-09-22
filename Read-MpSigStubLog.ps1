@@ -54,10 +54,10 @@ function main() {
     }
 
     $global:mpSigStubLogResults = Read-Records $logFilePath
+    Write-Host "Results stored in `$global:mpSigStubLogResults"
     return $global:mpSigStubLogResults
   }
   catch {
-    write-verbose "variables:$((get-variable -scope local).value | convertto-json -WarningAction SilentlyContinue -depth 2)"
     write-host "exception::$($psitem.Exception.Message)`r`n$($psitem.scriptStackTrace)" -ForegroundColor Red
     return $null
   }
@@ -595,6 +595,8 @@ function Read-Records($logFilePath) {
       Write-Warning "Unknown Record log file format index: $index"
     }
   }
+
+  $streamReader.Close()
   return $records
 }
 
