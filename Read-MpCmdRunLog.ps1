@@ -57,7 +57,7 @@ function Main() {
   try {
     if (!(Test-Path $logFilePath)) {
       Get-Help $scriptName -Examples
-      Write-Host "File not found: $logFilePath"
+      Write-Error "File not found: $logFilePath"
       return $null
     }
 
@@ -76,10 +76,10 @@ function Main() {
       Write-Host "Event Types with Errors: $($errorEventTypes | out-string)" -ForegroundColor Red
     }
 
+    Write-Host "Results saved to `$global:mpCmdRunLogResults"
     return $global:mpCmdRunLogResults
   }
   catch {
-    write-verbose "variables:$((get-variable -scope local).value | convertto-json -WarningAction SilentlyContinue -depth 2)"
     write-host "exception::$($psitem.Exception.Message)`r`n$($psitem.scriptStackTrace)" -ForegroundColor Red
     return $null
   }
@@ -298,6 +298,8 @@ function Read-Records($logFilePath) {
       Write-Warning "Unknown Record log file format index: $index line: $line"
     }
   }
+  
+  $streamReader.Close()
   return $records
 }
 
