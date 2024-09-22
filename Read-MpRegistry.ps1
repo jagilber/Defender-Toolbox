@@ -44,10 +44,12 @@ param(
 )
 
 $global:mpRegistry = [System.Collections.ArrayList]::New()
+$scriptName = "$psscriptroot\$($MyInvocation.MyCommand.Name)"
 
 function Main() {
   try {
     if (!(Test-Path $regFilePath)) {
+      Get-Help $scriptName -Examples
       Write-Error "The specified registry export file does not exist: $regFilePath"
       return
     }
@@ -126,7 +128,6 @@ function Main() {
     return $global:mpRegistry
   }
   catch {
-    #write-verbose "variables:$((get-variable -scope local).value | convertto-json -WarningAction SilentlyContinue -depth 2)"
     Write-Host "exception::$($psitem.Exception.Message)`r`n$($psitem.scriptStackTrace)" -ForegroundColor Red
     return $null
   }
